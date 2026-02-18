@@ -1,0 +1,31 @@
+# Environment
+.env
+.env.*
+
+# Node
+node_modules
+npm-debug.log*
+
+# Expo / React Native
+.expo
+.expo-shared
+web-build
+build
+
+# Android / iOS
+android/.gradle
+android/app/build
+ios/Pods
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+
+# Archives
+*.zip
+
+# Local Netlify folder
+.netlify

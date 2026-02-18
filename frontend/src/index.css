@@ -1,0 +1,691 @@
+/* ================================
+   CONSOLIDATED APP STYLESHEET
+   Login + Dashboard + Responsive
+================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --blue: #0d6efd;
+  --blue-dark: #0b5ed7;
+  --bg: #f4f8fd;
+  --card: #ffffff;
+  --border: #e5e7eb;
+  --text: #0f172a;
+  --muted: #64748b;
+  --radius: 12px;
+  --shadow: 0 4px 12px rgba(0,0,0,0.06);
+}
+
+/* Reset */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+/* ================================
+   LOGIN SCREEN
+================================ */
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;      /* vertical center */
+  justify-content: center;  /* horizontal center */
+  padding: 16px;            /* prevents edge touching on mobile */
+}
+
+.login-container {
+  max-width: 400px;
+  width: 100%;
+  padding: 2.5rem;
+  background: white;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+
+.login-container h2 {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.form-group {
+  margin-bottom: 1.2rem;
+}
+
+.form-group label {
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin-bottom: 6px;
+  display: block;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 0.85rem;
+  font-size: 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.btn {
+  width: 100%;
+  margin-top: 10px;
+  padding: 0.85rem;
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: var(--blue-dark);
+}
+
+.error-message {
+  margin-top: 1rem;
+  color: #dc2626;
+  text-align: center;
+}
+
+
+/* Select dropdown styles */
+select {
+  width: 100%;
+  max-width: 100%;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='%23333'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  padding-right: 36px;
+  box-sizing: border-box;
+}
+
+/* Style the dropdown options */
+select option {
+  padding: 10px;
+  font-size: 0.95rem;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Make sure the dropdown options are visible on mobile */
+select:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
+  position: relative;
+  z-index: 1000;
+}
+
+/* Fix for Firefox */
+@-moz-document url-prefix() {
+  select {
+    text-indent: -2px;
+    text-overflow: '';
+  }
+  
+  select option {
+    padding-left: 15px;
+  }
+}
+
+/* Ensure the dropdown options are properly displayed on mobile */
+@media (max-width: 480px) {
+  .login-container {
+    padding: 1.5rem;
+    width: calc(100% - 32px);
+    position: relative;
+    top: 0;
+    left: 0;
+    transform: none;
+    margin: 2rem auto;
+  }
+
+  .form-group {
+    position: relative;
+    width: 100%;
+  }
+
+  select {
+    width: 100%;
+    font-size: 16px; /* Prevent iOS zoom on focus */
+  }
+
+  /* Fix for iOS devices */
+  @supports (-webkit-touch-callout: none) {
+    select {
+      font-size: 16px;
+    }
+  }
+}
+
+/* ================================
+   APP LAYOUT
+================================ */
+.app-container {
+  min-height: 100vh;
+}
+
+.main-content {
+  width: 100%;
+}
+
+/* ================================
+   HEADER
+================================ */
+.app-header {
+  background: var(--blue);
+  color: #fff;
+  padding: 14px 20px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.user-info {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.user-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.username {
+  font-weight: 600;
+}
+
+.server-info {
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+.logout-btn {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.6);
+  color: #fff;
+  border-radius: 10px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.logout-btn:hover {
+  background: rgba(255,255,255,0.15);
+}
+
+/* ================================
+   NAVIGATION TILES
+================================ */
+.tiles-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 16px;
+}
+
+.nav-tile {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 22px 12px;
+  text-align: center;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.nav-tile:hover {
+  transform: translateY(-4px);
+}
+
+.tile-icon {
+  font-size: 2rem;
+  margin-bottom: 10px;
+}
+
+.tile-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+/* ================================
+   DASHBOARD CONTENT
+================================ */
+.dashboard-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 16px 24px;
+  display: grid;
+  gap: 20px;
+}
+
+.welcome-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.welcome-text h2 {
+  font-size: 1.2rem;
+}
+
+.welcome-stats {
+  display: flex;
+  gap: 20px;
+}
+
+.stat-item {
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--blue);
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* ================================
+   QUICK ACTIONS
+================================ */
+.quick-actions {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+
+.action-buttons {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.action-btn {
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.action-btn:hover {
+  background: var(--blue-dark);
+}
+
+/* ================================
+   RECENT ACTIVITY
+================================ */
+.recent-activity {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+
+.recent-activity ul {
+  list-style: none;
+  margin-top: 10px;
+}
+
+.recent-activity li {
+  padding: 8px 0;
+}
+
+/* ================================
+   RESPONSIVE
+================================ */
+@media (max-width: 768px) {
+  .tiles-container {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .welcome-card {
+    flex-direction: column;
+  }
+
+  .welcome-stats {
+    justify-content: space-between;
+  }
+}
+
+@media (hover: none) {
+  button, .nav-tile {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Text-only tile */
+.text-tile {
+  background: linear-gradient(135deg, #f8fbff, #ffffff);
+  border: 1px solid #ffffff;
+  border-radius: 14px;
+  padding: 22px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+/* Tile text */
+.tile-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1e40af; /* blue-700 */
+  line-height: 1.4;
+  letter-spacing: 0.2px;
+}
+
+/* Hover */
+.text-tile:hover {
+  background: linear-gradient(135deg, #e0edff, #dbeafe);
+  border-color: #7d9ab1;
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.15);
+}
+
+/* Ensure the dropdown options are properly displayed on mobile */
+@media (max-width: 480px) {
+  .login-container {
+    padding: 1.5rem;
+    width: 90%;
+    max-width: 400px;
+    position: relative;
+    margin: 2rem auto;
+  }
+
+  /* Ensure select dropdown is properly sized */
+  .form-group {
+    position: relative;
+    width: 100%;
+  }
+
+  select {
+    width: 100%;
+    font-size: 16px; /* Prevent iOS zoom on focus */
+    padding: 12px 16px;
+  }
+
+  /* Fix for iOS devices */
+  @supports (-webkit-touch-callout: none) {
+    select {
+      font-size: 16px;
+      height: 44px; /* Minimum touch target size */
+    }
+  }
+
+  /* Make sure dropdown options are visible */
+  select:focus {
+    position: relative;
+  }
+
+  /* Fix for dropdown options on mobile */
+  select option {
+    padding: 12px 16px;
+    white-space: normal;
+    word-wrap: break-word;
+  }
+}
+
+/* Additional fix for mobile dropdowns */
+select:focus {
+  position: relative;
+}
+
+/* Ensure the select dropdown is clickable on mobile */
+select {
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Fix for Android Chrome */
+@media screen and (-webkit-min-device-pixel-ratio:0) {
+  select {
+    height: 44px; /* Minimum touch target size */
+  }
+}
+
+/* SAP-like styles */
+.sapUiBody {
+  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: #f2f2f2;
+  color: #333;
+}
+
+.sapMPage {
+  background: #f2f2f2;
+}
+
+.sapMBar {
+  background: #f8f9fa;
+  border-bottom: 1px solid #ddd;
+  padding: 0.5rem 1rem;
+}
+
+.sapMBarPH {
+  font-size: 1.25rem;
+  color: #32363a;
+}
+
+.sapMText {
+  color: #32363a;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.sapMLabel {
+  color: #6a6d70;
+  font-size: 0.75rem;
+  margin-bottom: 0.25rem;
+  display: block;
+}
+
+.sapMInputBase {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.sapMInputBaseInner {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #89919a;
+  border-radius: 0.25rem;
+  background: #fff;
+}
+
+.sapMBtn {
+  display: inline-block;
+  margin: 0 0.25rem;
+  vertical-align: top;
+}
+
+.sapMBtnInner {
+  display: inline-block;
+  padding: 0 1rem;
+  height: 2.25rem;
+  line-height: 2.25rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.sapMBtnAccept .sapMBtnInner {
+  background-color: #0a6ed1;
+  color: #fff;
+}
+
+.sapMBtnTransparent .sapMBtnInner {
+  background: transparent;
+  border: 1px solid #89919a;
+  color: #0a6ed1;
+}
+
+.sapMBtn:not(.sapMBtnDisabled) .sapMBtnInner:hover {
+  opacity: 0.9;
+}
+
+.sapMBtnDisabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sapUiFormTitle {
+  font-size: 1rem;
+  font-weight: bold;
+  margin: 1rem 0 0.5rem 0;
+  color: #32363a;
+}
+
+.sapUiFormResGrid {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0 -0.5rem;
+}
+
+.sapUiFormResGridLbl {
+  flex: 0 0 25%;
+  max-width: 25%;
+  padding: 0 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.sapUiFormResGridCont {
+  flex: 0 0 75%;
+  max-width: 75%;
+  padding: 0 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.sapMMessageToast {
+  padding: 1rem;
+  border-radius: 0.25rem;
+  margin-bottom: 1rem;
+}
+
+.sapMMessageToastError {
+  background-color: #faeaea;
+  border-left: 4px solid #bb0000;
+  color: #bb0000;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .sapUiFormResGridLbl,
+  .sapUiFormResGridCont {
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
+}
+
+/* Add to your main CSS file */
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-control {
+  width: 100%;
+  padding: 8px;
+  margin-top: 5px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.button-group {
+  margin-top: 20px;
+  display: flex;
+  gap: 10px;
+}
+
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background-color: #007bff;
+  color: white;
+}
+
+.btn-success {
+  background-color: #28a745;
+  color: white;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error {
+  color: #dc3545;
+  margin-bottom: 15px;
+  padding: 10px;
+  background-color: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 4px;
+}
