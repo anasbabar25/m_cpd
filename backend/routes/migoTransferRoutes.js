@@ -18,6 +18,13 @@ const axiosInstance = axios.create({
 
 const router = express.Router();
 
+function decodeBasicAuthHeader(authHeader) {
+  const decoded = Buffer.from(String(authHeader || ""), 'base64').toString('utf-8');
+  const idx = decoded.indexOf(':');
+  if (idx <= 0) return { username: null, password: null };
+  return { username: decoded.slice(0, idx), password: decoded.slice(idx + 1) };
+}
+
 // BSP page GET request
 router.get('/transfer', async (req, res) => {
   try {
@@ -25,16 +32,7 @@ router.get('/transfer', async (req, res) => {
     
     // Decode user credentials from header
     const authHeader = req.headers['x-user-auth'];
-    let username, password;
-    
-    if (authHeader) {
-      try {
-        const decoded = Buffer.from(authHeader, 'base64').toString('utf-8');
-        [username, password] = decoded.split(':');
-      } catch (error) {
-        console.error('Error decoding auth header:', error);
-      }
-    }
+    let { username, password } = decodeBasicAuthHeader(authHeader);
 
     if (!username || !password) {
       return res.status(401).json({
@@ -100,16 +98,7 @@ router.post('/transfer', async (req, res) => {
 
     // Decode user credentials from header
     const authHeader = req.headers['x-user-auth'];
-    let username, password;
-    
-    if (authHeader) {
-      try {
-        const decoded = Buffer.from(authHeader, 'base64').toString('utf-8');
-        [username, password] = decoded.split(':');
-      } catch (error) {
-        console.error('Error decoding auth header:', error);
-      }
-    }
+    let { username, password } = decodeBasicAuthHeader(authHeader);
 
     if (!username || !password) {
       return res.status(401).json({
@@ -184,7 +173,8 @@ const apiUrl = env === 'prd'
     if (error.response && error.response.status === 401) {
       res.status(401).json({ 
         error: 'Authentication failed',
-        message: 'Invalid credentials for SAP system'
+        message: 'Invalid credentials for SAP system',
+        details: error.response?.data
       });
     } else if (error.response && error.response.status === 403) {
       res.status(403).json({ 

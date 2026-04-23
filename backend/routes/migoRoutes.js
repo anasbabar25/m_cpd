@@ -56,8 +56,10 @@ const getUserFromHeaders = (req) => {
   const auth = req.headers['x-user-auth'];
   const environment = req.headers['x-user-environment'] || '110';
   if (!auth) throw new Error('User credentials required');
-  const decoded = Buffer.from(auth, 'base64').toString();
-  const [username, password] = decoded.split(':');
+  const decoded = Buffer.from(auth, 'base64').toString('utf-8');
+  const idx = decoded.indexOf(':');
+  const username = idx > 0 ? decoded.slice(0, idx) : null;
+  const password = idx > 0 ? decoded.slice(idx + 1) : null;
   if (!username || !password) throw new Error('Invalid user credentials');
   return { username, password, environment };
 };
