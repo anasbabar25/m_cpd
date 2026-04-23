@@ -2,7 +2,7 @@ import axios from "axios";
 
 // Use production server for login, local server for other API calls
 const LOGIN_API_BASE = "https://sap-app.cfapps.eu10-004.hana.ondemand.com/api/auth";
-const API_BASE = "http://192.168.60.87:5000/api/auth";
+const API_BASE = "https://sap-app.cfapps.eu10-004.hana.ondemand.com/api/auth";
 
 // Create axios instance for local API calls
 const apiClient = axios.create({

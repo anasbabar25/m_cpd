@@ -113,7 +113,11 @@ router.post('/transfer', async (req, res) => {
 
     
     // Use the new API endpoint for transfer
-    const apiUrl = 'https://devspace.test.apimanagement.eu10.hana.ondemand.com/plc/stg/TransferHeaderSet';
+   const environmentHeader = req.headers['x-user-environment'] || 'dev';
+const env = (environmentHeader === 'prd' || environmentHeader === '300') ? 'prd' : 'dev';
+const apiUrl = env === 'prd'
+  ? 'https://prdspace.prod01.apimanagement.eu10.hana.ondemand.com:443/plc/stg/TransferHeaderSet'
+  : 'https://devspace.test.apimanagement.eu10.hana.ondemand.com/plc/stg/TransferHeaderSet';
     console.log('Attempting transfer to:', apiUrl);
 
     // Get CSRF token for API call
@@ -121,7 +125,10 @@ router.post('/transfer', async (req, res) => {
     let cookies;
     try {
       // Fetch CSRF token from the API service root
-      const csrfResponse = await axiosInstance.head('https://devspace.test.apimanagement.eu10.hana.ondemand.com/plc/stg/', {
+      const csrfBaseUrl = env === 'prd'
+  ? 'https://prdspace.prod01.apimanagement.eu10.hana.ondemand.com:443/plc/stg'
+  : 'https://devspace.test.apimanagement.eu10.hana.ondemand.com/plc/stg';
+      const csrfResponse = await axiosInstance.head(`${csrfBaseUrl}/`, {
         headers: {
           'X-CSRF-Token': 'Fetch',
         },

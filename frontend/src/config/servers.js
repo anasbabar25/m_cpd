@@ -1,9 +1,9 @@
-export const apiEndpoints = {
-  dev: 'http://192.168.60.87:5000',
-  prd: 'https://sap-app.cfapps.eu10-004.hana.ondemand.com'
-};
+export const servers = [
+  { label: "Development", value: "dev" },
+  { label: "Production", value: "prd" },
+];
 
-export const materialDocApiEndpoints = {
-  dev: 'https://devspace.test.apimanagement.eu10.hana.ondemand.com/cpd/pc/stg',
-  prd: 'https://sap-app.cfapps.eu10-004.hana.ondemand.com/cpd/pc/prd'
+export const apiEndpoints = {
+  dev: 'https://sap-app.cfapps.eu10-004.hana.ondemand.com',
+  dev2: 'https://sap-app2.cfapps.eu10-004.hana.ondemand.com'
 };

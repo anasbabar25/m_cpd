@@ -18,6 +18,8 @@ function BspPage({ user, onLogout }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showDocumentClearConfirm, setShowDocumentClearConfirm] = useState(false);
   const [success, setSuccess] = useState(() => {
     const state = location.state;
     if (state?.migoPostSuccess) {
@@ -42,19 +44,24 @@ function BspPage({ user, onLogout }) {
   useEffect(() => {
     const prefill = location.state?.prefillBatches;
     const prefillDocumentNumber = location.state?.prefillDocumentNumber;
-    const prefillDocumentData = location.state?.documentData;
+    const prefillDocumentData = location.state?.prefillDocumentData || location.state?.documentData; // Check both patterns
+    
+    console.log('BspPage useEffect - prefillBatches:', prefill);
+    console.log('BspPage useEffect - prefillDocumentNumber:', prefillDocumentNumber);
+    console.log('BspPage useEffect - prefillDocumentData:', prefillDocumentData ? 'EXISTS' : 'NONE');
+    console.log('BspPage useEffect - documentData:', location.state?.documentData ? 'EXISTS' : 'NONE');
     
     // Handle pre-filled batches (existing logic)
-    if (!prefill) return;
+    if (prefill) {
+      const list = Array.isArray(prefill) ? prefill : [prefill];
+      const normalized = list
+        .filter(Boolean)
+        .map((b) => (b?.d ? b : { d: b }));
 
-    const list = Array.isArray(prefill) ? prefill : [prefill];
-    const normalized = list
-      .filter(Boolean)
-      .map((b) => (b?.d ? b : { d: b }));
+      setBatches(normalized);
+    }
 
-    setBatches(normalized);
-
-    // Handle pre-filled document number and data
+    // Handle pre-filled document number and data - process even if no batches
     if (prefillDocumentNumber) {
       setMaterialDocNumber(prefillDocumentNumber);
     }
@@ -65,6 +72,9 @@ function BspPage({ user, onLogout }) {
       
       // Create summary data by grouping materials by description
       const materials = prefillDocumentData.d?.RefItemSet?.results || prefillDocumentData.d?.RefItemSet || [];
+      console.log('BspPage - Materials found:', materials.length);
+      console.log('BspPage - Sample material:', materials[0]);
+      
       if (materials.length > 0) {
         const summaryMap = new Map();
         materials.forEach(material => {
@@ -82,16 +92,18 @@ function BspPage({ user, onLogout }) {
         
         const summaryArray = Array.from(summaryMap.values());
         setSummaryData(summaryArray);
+        console.log('BspPage - Summary data set:', summaryArray.length, 'items');
+      } else {
+        console.log('BspPage - No materials found, summary not created');
       }
     }
 
     const nextState = { ...(location.state || {}) };
     delete nextState.prefillBatches;
     delete nextState.prefillDocumentNumber;
-    // Keep prefillDocumentData if it exists (from MIGO page)
-    if (nextState.prefillDocumentData) {
-      // Don't delete it, keep it for document restoration
-    } else {
+    // Keep prefillDocumentData if it exists (from MIGO page or scan page)
+    // Only delete it if we're explicitly clearing (not when navigating back)
+    if (!nextState.prefillDocumentData) {
       delete nextState.documentData;
     }
     navigate('/bsp', { replace: true, state: Object.keys(nextState).length ? nextState : null });
@@ -120,7 +132,7 @@ function BspPage({ user, onLogout }) {
       const creds = getUserCredentials();
       if (!creds) throw new Error("User not authenticated. Please log in again.");
 
-      const baseUrl = apiEndpoints[creds.environment] || apiEndpoints.dev;
+      const baseUrl = apiEndpoints.dev;
       
       // Use backend API route to call the new API
       const response = await fetch(`${baseUrl}/api/material-doc/fetch`, {
@@ -144,19 +156,22 @@ function BspPage({ user, onLogout }) {
       
       if (materials.length === 0) throw new Error("No materials found for this document");
       
-      // Convert materials to batch format for compatibility
-      const batchData = materials[0]; // Take first material as batch
-      const d = {
-        ...batchData,
-        Charg: batchData.Batch || batchData.Charg,
-        QTY: batchData.Quantity || batchData.Qty
-      };
+      // Convert ALL materials to batch format for compatibility
+      const newBatches = materials.map((batchData) => ({
+        d: {
+          ...batchData,
+          Charg: batchData.Batch || batchData.Charg,
+          QTY: batchData.Quantity || batchData.Qty
+        }
+      }));
       
-      setBatches(prev => [...prev, { d: d }]);
+      setBatches(prev => [...prev, ...newBatches]);
       setBatchNumber("");
     } catch (err) {
       console.error('Fetch error:', err);
       setError(err.message || "Failed to fetch material information");
+      // Clear input field if batch not found
+      setBatchNumber("");
     } finally {
       setLoading(false);
     }
@@ -181,10 +196,19 @@ function BspPage({ user, onLogout }) {
   };
 
   const clearAll = () => {
+    setShowClearConfirm(true);
+  };
+
+  const confirmClearAll = () => {
     setBatches([]);
     setSelectedBatch(null);
     setShowDetailsPopup(false);
     setError(null);
+    setShowClearConfirm(false);
+  };
+
+  const cancelClearAll = () => {
+    setShowClearConfirm(false);
   };
 
   const openDetails = (batch) => {
@@ -217,7 +241,8 @@ function BspPage({ user, onLogout }) {
       const credentials = getUserCredentials();
       if (!credentials) throw new Error("User not authenticated. Please log in again.");
 
-      const baseUrl = apiEndpoints[credentials.environment] || apiEndpoints.dev;
+      // BSP page should always use dev2 backend
+      const baseUrl = apiEndpoints.dev;
       
       // Use backend API route to call the new API
       const response = await fetch(`${baseUrl}/api/material-doc/fetch`, {
@@ -280,13 +305,21 @@ function BspPage({ user, onLogout }) {
   };
 
   const handleClear = () => {
+    setShowDocumentClearConfirm(true);
+  };
+
+  const confirmDocumentClear = () => {
     setMaterialDocNumber('');
     setDocumentData(null);
     setSummaryData([]);
     setHasFetchedOnce(false);
     setError('');
     setFetchSuccess('');
-    // Reset hasFetchedOnce to allow fetch button to turn blue again
+    setShowDocumentClearConfirm(false);
+  };
+
+  const cancelDocumentClear = () => {
+    setShowDocumentClearConfirm(false);
   };
 
   const handleScanButton = () => {
@@ -302,7 +335,8 @@ function BspPage({ user, onLogout }) {
     try {
       const material = materials[index];
       const credentials = getUserCredentials();
-      const baseUrl = apiEndpoints[credentials.environment] || apiEndpoints.dev;
+      // BSP page should always use dev2 backend
+      const baseUrl = apiEndpoints.dev;
       
       // Try the new material check API first
       try {
@@ -374,7 +408,8 @@ function BspPage({ user, onLogout }) {
           navigate('/migo', { 
             state: { 
               materials: validMaterials,
-              isMaterialFlow: true
+              isMaterialFlow: true,
+              documentData: documentData
             } 
           });
         }, 2000);
@@ -398,7 +433,8 @@ function BspPage({ user, onLogout }) {
       navigate("/migo", { 
         state: { 
           batchData: batchListToSend,
-          isMaterialFlow: false
+          isMaterialFlow: false,
+          documentData: documentData
         } 
       });
     }
@@ -476,6 +512,64 @@ function BspPage({ user, onLogout }) {
         </div>
       )}
 
+      {/* Document Clear Confirmation Dialog */}
+      {showDocumentClearConfirm && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            padding: '2rem',
+            borderRadius: '12px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            maxWidth: '400px',
+            width: '90%'
+          }}>
+            <h3 style={{ margin: '0 0 1rem 0', color: '#333' }}>Confirm Clear</h3>
+            <p style={{ margin: '0 0 1.5rem 0', color: '#666' }}>
+              Are you sure you want to clear the document number and all related data? This action cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+              <button
+                onClick={cancelDocumentClear}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  border: '1px solid #ddd',
+                  backgroundColor: 'white',
+                  color: '#666',
+                  borderRadius: '6px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDocumentClear}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  border: 'none',
+                  backgroundColor: '#dc3545',
+                  color: 'white',
+                  borderRadius: '6px',
+                  cursor: 'pointer'
+                }}
+              >
+                Yes, Clear
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ maxWidth: "600px", margin: "20px auto", padding: "1rem" }}>
         <div style={{ background: "white", borderRadius: "12px", padding: "1.5rem", boxShadow: "0 4px 12px rgba(0,0,0,0.06)" }}>
 
@@ -501,7 +595,7 @@ function BspPage({ user, onLogout }) {
             </div>
           )}
 
-          <div style={{ marginTop: "1.5rem" }}>
+          <div style={{ marginTop: "0rem" }}>
             <h3>Place In Storage</h3>
             <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
               <input
@@ -556,8 +650,8 @@ function BspPage({ user, onLogout }) {
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
                     <tr style={{ background: "#f3f4f6" }}>
-                      <th style={{ textAlign: "left", padding: "0.75rem", borderBottom: "2px solid #d1d5db" }}>Number of Reels</th>
-                      <th style={{ textAlign: "left", padding: "0.75rem", borderBottom: "2px solid #d1d5db" }}>Description</th>
+                      <th style={{ textAlign: "left", padding: "0.15rem", borderBottom: "2px solid #d1d5db" }}># of Reels</th>
+                      <th style={{ textAlign: "left", padding: "0.85rem", borderBottom: "2px solid #d1d5db" }}>Description</th>
                     </tr>
                   </thead>
                   <tbody>

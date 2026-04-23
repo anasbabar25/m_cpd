@@ -1,20 +1,18 @@
 // frontend/src/pages/migoPage.js
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import { getUserCredentials } from '../api';
 import { apiEndpoints } from "../config/servers";
 
-function MigoPage({ user, onLogout }) {
+function MigoPage2({ user, onLogout }) {
   const location = useLocation();
   const navigate = useNavigate();
   const batchData = location.state?.batchData;
-  const materials = location.state?.materials;
-  const isMaterialFlow = location.state?.isMaterialFlow;
 
   const [formData, setFormData] = useState({
     storageLocationTo: ''
   });
-  const documentData = location.state?.documentData;
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -26,34 +24,15 @@ function MigoPage({ user, onLogout }) {
   const [postSuccessData, setPostSuccessData] = useState(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-  const formatMaterialNumber = (material) => {
-    if (!material) return '-';
-    // Skip leading zeros and display from first non-zero digit
-    return material.replace(/^0+/, '');
-  };
-
   useEffect(() => {
-    if (!batchData && !materials) {
-      navigate('/bsp');
+    if (!batchData) {
+      navigate('/bsp2');
       return;
     }
 
-    // Auto-populate storage location from document data if available
-    if (documentData && documentData.d && documentData.d.RefItemSet && documentData.d.RefItemSet.results && documentData.d.RefItemSet.results.length > 0) {
-      const firstMaterial = documentData.d.RefItemSet.results[0];
-      if (firstMaterial.StgeLoc || firstMaterial.LGORT) {
-        setFormData(prev => ({
-          ...prev,
-          storageLocationTo: firstMaterial.StgeLoc || firstMaterial.LGORT || ''
-        }));
-      }
-    }
-  }, [batchData, materials, documentData, navigate]);
-
-  // For new flow: only show matched batches
-  const matchedMaterials = isMaterialFlow && materials 
-    ? materials.filter(m => m.isMatched !== false) // Only matched batches
-    : materials;
+    // Don't auto-populate storage location - let user input it manually
+    // The field will remain empty by default
+  }, [batchData, navigate]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -84,36 +63,23 @@ function MigoPage({ user, onLogout }) {
   };
 
   
-  const preparePayload = (isTestRun) => {
-  let items;
-  
-  if (isMaterialFlow) {
-    // Handle material document flow - use matched materials only
-    items = Array.isArray(matchedMaterials) ? matchedMaterials : [matchedMaterials];
-  } else {
-    // Handle batch flow
-    items = Array.isArray(batchData) 
-      ? batchData.map(b => b.d || b) 
-      : [batchData.d || batchData];
-  }
+const preparePayload = (isTestRun) => {
+  const batchItems = Array.isArray(batchData) 
+    ? batchData.map(b => b.d || b) 
+    : [batchData.d || batchData];
 
-  // Create payload with correct structure for SAP OData TransferHeaderSet
-  const navItems = items.map((item, index) => ({
-    ItemNo: item.ItemNo || String(index + 1).padStart(4, '0'),
-    Material: item.Material || item.MATNR || item.Matnr || item.matnr || '',
-    Plant: item.Plant || item.Werks || item.WERKS || item.werks || '1134',
-    StgeLoc: item.StgeLoc || item.LGORT || item.Lgort || item.lgort || '3PW1',
-    StgeLocTo: formData.storageLocationTo || '3PW1',
-    Batch: item.Batch || item.Charg || item.charg || '',
-    Quantity: parseFloat(item.Quantity || item.QTY || item.Qty || item.Quantity || item.MENGE || item.menge || '0').toFixed(3),
-    EntryUom: item.Uom || item.EntryUom || item.MEINS || item.Meins || item.meins || 'KG'
-  }));
+  const item = batchItems[0];
 
   const payload = {
-    Bwart: "315",
-    GmCode: "04",
-    TestRun: isTestRun ? "X" : "",
-    NavItems: navItems
+    IvMatnr: String(item.Matnr || item.MATNR || item.matnr || '').replace(/^0+/, ''),
+    IvWerks: item.Werks || item.WERKS || '1134',
+    IvBwart: '313',
+    IvGmCode: '04',
+    IvLgortFrom: item.Lgort || item.LGORT || '',
+    IvLgortTo: formData.storageLocationTo || '',
+    IvCharg: item.Charg || item.CHARG || '',
+    IvQty: String(parseFloat(item.Qty || item.QTY || item.Quantity || '0').toFixed(3)),
+    IvUom: item.Meins || item.MEINS || 'KG'
   };
 
   console.log('Prepared payload:', JSON.stringify(payload, null, 2));
@@ -129,7 +95,7 @@ function MigoPage({ user, onLogout }) {
   };
 
   const handleFetchAgain = () => {
-    navigate('/bsp', { replace: true, state: null });
+    navigate('/bsp2', { replace: true, state: null });
   };
 
   const handleTransfer = async (isTestRun) => {
@@ -149,46 +115,37 @@ function MigoPage({ user, onLogout }) {
 
       const payload = preparePayload(isTestRun);
       
-      // MIGO page should always use dev2 backend
-      const apiUrl = `${apiEndpoints.dev2}/api/migo-transfer/transfer`;
+      // MIGO2 page should always use dev backend
+      const baseUrl = apiEndpoints.dev;
       
-      const headers = {
-        'Content-Type': 'application/json',
-        'X-User-Auth': btoa(`${creds.username}:${creds.password}`),
-        'X-User-Environment': creds.environment
-      };
-      
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify(payload)
+      // Use unified endpoints - backend handles CSRF tokens internally
+      const endpoint = isTestRun ? '/api/migo/check' : '/api/migo/post';
+      const response = await axios.post(`${baseUrl}${endpoint}`, payload, {
+        headers: {
+          'X-User-Auth': btoa(`${creds.username}:${creds.password}`),
+          'X-User-Environment': creds.environment,
+          'Content-Type': 'application/json'
+        }
       });
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Transfer API Error:', errorText);
-        throw new Error(`Transfer failed: ${response.status} ${response.statusText}`);
-      }
-
-      const result = await response.json();
-      
-      if (isTestRun) {
-        setTransferResult(result);
-        setValidationPassed(true);
-        setSuccessMessage('Validation successful! You can now post the materials.');
-        setShowSuccessPopup(true);
+      if (response.data.success) {
+        if (isTestRun) {
+          setTransferResult(response.data.data);
+          setValidationPassed(true);
+          setSuccessMessage('Validation successful!');
+          setShowSuccessPopup(true);
+        } else {
+          setTransferResult(response.data);
+          setShowSuccessPopup(false);
+          setPostSuccessData(response.data);
+          setShowPostSuccessPopup(true);
+        }
       } else {
-        // Handle successful post
-        setPostSuccessData({
-          documentNumber: result.d?.MatDoc || result.d?.DocumentNumber || 'N/A',
-          message: result.d?.Message || result.d?.message || 'Materials posted successfully'
-        });
-        setShowPostSuccessPopup(true);
+        throw new Error(response.data.error || isTestRun ? 'Validation failed' : 'Post failed');
       }
     } catch (error) {
-      console.error('Transfer error:', error);
-      setError(error.message || (isTestRun ? 'Validation failed' : 'Post failed'));
-      if (error.message.includes('401') || error.message.includes('authentication')) {
+      setError(error.response?.data?.error || error.message);
+      if (error.response?.status === 401) {
         navigate('/login');
       }
     } finally {
@@ -197,12 +154,9 @@ function MigoPage({ user, onLogout }) {
   };
 
   const handleBack = () => {
-    navigate('/bsp', {
+    navigate('/bsp2', {
       state: {
-        prefillBatches: batchData,
-        prefillDocumentData: documentData,
-        documentData: documentData, // Add this to match ScanPage pattern
-        prefillDocumentNumber: documentData?.d?.Mblnr || documentData?.d?.DocumentNumber || ''
+        prefillBatches: batchData
       }
     });
   };
@@ -220,8 +174,8 @@ function MigoPage({ user, onLogout }) {
     setShowLogoutConfirm(false);
   };
 
-  if (!batchData && !materials) {
-    return <div>Loading data...</div>;
+  if (!batchData) {
+    return <div>Loading batch data...</div>;
   }
 
   return (
@@ -298,54 +252,22 @@ function MigoPage({ user, onLogout }) {
 
       <div style={{ maxWidth: "600px", margin: "20px auto", padding: "1rem" }}>
         <div style={{ background: "white", borderRadius: "12px", padding: "1.5rem", boxShadow: "0 4px 12px rgba(0,0,0,0.06)" }}>
-          <h2 style={{ marginTop: 0 }}>Place In Storage</h2>
+          <h2 style={{ marginTop: 0 }}>Remove from Storage</h2>
 
           {error && <div style={{ background: "#fee2e2", color: "#b91c1c", padding: "0.75rem", borderRadius: "8px", marginTop: "0.5rem" }}>{error}</div>}
           {successMessage && <div style={{ background: "#dcfce7", color: "#166534", padding: "0.75rem", borderRadius: "8px", marginTop: "0.5rem" }}>{successMessage}</div>}
 
-          <div style={{ marginTop: "1rem" }}>
-            <h4>Storage Location To</h4>
-            <div style={{ padding: "0.75rem", background: "#f9fafb", borderRadius: "8px", border: "1px solid #e5e7eb", fontWeight: "600" }}>
-              {formData.storageLocationTo || 'Auto-populated from document'}
-            </div>
+          <div className="form-group">
+            <label>Storage Location To</label>
+            <input
+              type="text"
+              name="storageLocationTo"
+              value={formData.storageLocationTo}
+              onChange={handleChange}
+              className="form-control"
+              required
+            />
           </div>
-
-          {isMaterialFlow && matchedMaterials && matchedMaterials.length > 0 && (
-            <div style={{ marginTop: "1rem" }}>
-              <h4>Matched Batches to Post</h4>
-              <div style={{ overflowX: "auto", marginTop: "0.5rem" }}>
-                {matchedMaterials.map((material, index) => (
-                  <div 
-                    key={index} 
-                    style={{ 
-                      marginBottom: "1rem",
-                      padding: "1rem",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "8px",
-                      backgroundColor: "#f0fdf4"
-                    }}
-                  >
-                    <div style={{ display: "flex", marginBottom: "0.5rem" }}>
-                      <strong style={{ minWidth: "120px" }}>Material:</strong>
-                      <span>{formatMaterialNumber(material.Material || material.matnr || material.Matnr || material.matnr) || '-'}</span>
-                    </div>
-                    <div style={{ display: "flex", marginBottom: "0.5rem" }}>
-                      <strong style={{ minWidth: "120px" }}>Description:</strong>
-                      <span>{material.MatDesc || material.Maktx || material.maktx || '-'}</span>
-                    </div>
-                    <div style={{ display: "flex", marginBottom: "0.5rem" }}>
-                      <strong style={{ minWidth: "120px" }}>Batch:</strong>
-                      <span>{material.Batch || '-'}</span>
-                    </div>
-                    <div style={{ display: "flex" }}>
-                      <strong style={{ minWidth: "120px" }}>Quantity:</strong>
-                      <span>{material.Quantity || material.menge || material.Menge || '-'} {material.Uom || material.EntryUom || material.meins || material.Meins || ''}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -384,10 +306,13 @@ function MigoPage({ user, onLogout }) {
           <div style={{ width: "100%", maxWidth: "520px", background: "white", borderRadius: "12px", padding: "1.5rem", boxShadow: "0 10px 30px rgba(0,0,0,0.25)" }}>
             <h3 style={{ marginTop: 0 }}>Posted Successfully</h3>
             <div style={{ border: "1px solid #e5e7eb", borderRadius: "10px", padding: "0.9rem", background: "#f9fafb" }}>
-              <div style={{ fontWeight: 600, color: "#111827", marginBottom: "0.5rem" }}>Status</div>
-              <div style={{ fontSize: "1.1rem", color: "#111827", fontWeight: "500" }}>
-                {postSuccessData?.message || postSuccessData?.Message || 'Materials posted successfully'}
+              <div style={{ fontWeight: 600, color: "#111827" }}>Document Number</div>
+              <div style={{ marginTop: "0.25rem", fontSize: "1.1rem", color: "#111827" }}>
+                {postSuccessData?.documentNumber || '-'}
               </div>
+              {(postSuccessData?.message || postSuccessData?.Message) && (
+                <div style={{ marginTop: "0.75rem", color: "#374151" }}>{postSuccessData?.message || postSuccessData?.Message}</div>
+              )}
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "1.25rem" }}>
@@ -425,4 +350,4 @@ function MigoPage({ user, onLogout }) {
   );
 }
 
-export default MigoPage;
+export default MigoPage2;
