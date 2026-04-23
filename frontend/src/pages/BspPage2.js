@@ -73,8 +73,8 @@ function BspPage2({ user, onLogout }) {
       const creds = getUserCredentials();
       if (!creds) throw new Error("User not authenticated. Please log in again.");
 
-      // BSP2 page should always use dev backend
-      const baseUrl = apiEndpoints.dev;
+      // Use backend based on environment
+      const baseUrl = apiEndpoints[creds.environment] || apiEndpoints.dev;
       
       const endpoint = `/api/BatchInfoGateway/${input}`;
       
