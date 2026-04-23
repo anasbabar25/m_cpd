@@ -8,8 +8,8 @@ const router = express.Router();
    CONFIG
 ===================================================== */
  
-// Use only the specified API URL
-const API_URL_DEV = "https://devspace.test.apimanagement.eu10.hana.ondemand.com/cpd/pc/stg";
+// TEMP: use the CPD batch proxy for DEV batch-info calls
+const API_URL_DEV = "https://devspace.test.apimanagement.eu10.hana.ondemand.com/cpd/batch";
 const API_URL_PRD = "https://prdspace.prod01.apimanagement.eu10.hana.ondemand.com:443/grp/batch";
  
 const SAP_USER = process.env.SAP_USER;
@@ -200,13 +200,7 @@ router.get("/BatchInfo/:batchNumber", async (req, res) => {
 router.get("/BatchInfoGateway/:batchNumber", async (req, res) => {
   try {
     const { batchNumber } = req.params;
-    const environment = req.headers["x-user-environment"];
- 
-    if (!environment) {
-      return res
-        .status(400)
-        .json({ error: "X-User-Environment header required (dev, 110, prd, or 300)" });
-    }
+    const environment = req.headers["x-user-environment"] || "dev";
  
     if (!["dev", "110", "prd", "300"].includes(environment)) {
       return res

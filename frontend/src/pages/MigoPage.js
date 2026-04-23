@@ -84,7 +84,7 @@ function MigoPage({ user, onLogout }) {
   };
 
   
-  const preparePayload = (isTestRun) => {
+  const preparePayload = (isTestRun, environment) => {
   let items;
   
   if (isMaterialFlow) {
@@ -113,6 +113,7 @@ function MigoPage({ user, onLogout }) {
     Bwart: "315",
     GmCode: "04",
     TestRun: isTestRun ? "X" : "",
+    ...((environment === 'prd' || environment === '300') ? { DocHeaderText: "From App" } : {}),
     NavItems: navItems
   };
 
@@ -147,7 +148,7 @@ function MigoPage({ user, onLogout }) {
       const creds = getUserCredentials();
       if (!creds) throw new Error("User not authenticated. Please log in again.");
 
-      const payload = preparePayload(isTestRun);
+      const payload = preparePayload(isTestRun, creds.environment);
       
       // MIGO page should always use dev2 backend
       const apiUrl = `${apiEndpoints.dev2}/api/migo-transfer/transfer`;

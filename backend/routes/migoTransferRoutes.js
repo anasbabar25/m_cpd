@@ -2,11 +2,18 @@ const express = require('express');
 const axios = require('axios');
 const https = require('https');
 
-// Create axios instance that ignores SSL certificate errors
+// Create axios instance that ignores SSL certificate errors and prevents Brotli compression
 const axiosInstance = axios.create({
   httpsAgent: new https.Agent({
     rejectUnauthorized: false // Ignore SSL certificate validation
-  })
+  }),
+  headers: {
+    'Accept-Encoding': 'identity', // No compression
+    'User-Agent': 'SAP-Integration-Backend'
+  },
+  decompress: false,
+  maxContentLength: 50 * 1024 * 1024,
+  maxBodyLength: 50 * 1024 * 1024
 });
 
 const router = express.Router();
@@ -130,7 +137,7 @@ const apiUrl = env === 'prd'
   : 'https://devspace.test.apimanagement.eu10.hana.ondemand.com/plc/stg';
       const csrfResponse = await axiosInstance.head(`${csrfBaseUrl}/`, {
         headers: {
-          'X-CSRF-Token': 'Fetch',
+          'X-CSRF-Token': 'Fetch'
         },
         auth: {
           username: username,

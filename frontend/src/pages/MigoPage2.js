@@ -63,23 +63,33 @@ function MigoPage2({ user, onLogout }) {
   };
 
   
-const preparePayload = (isTestRun) => {
+const preparePayload = (isTestRun, environment) => {
   const batchItems = Array.isArray(batchData) 
     ? batchData.map(b => b.d || b) 
     : [batchData.d || batchData];
 
-  const item = batchItems[0];
+  // Create NavItems array for all batches with proper ItemNo
+  const navItems = batchItems.map((item, index) => {
+    const itemNumber = String((index + 1) * 10).padStart(6, '0'); // 000010, 000020, etc.
+    return {
+      ItemNo: itemNumber,
+      Material: String(item.Matnr || item.MATNR || item.matnr || '').replace(/^0+/, ''),
+      Plant: item.Werks || item.WERKS || '1134',
+      StgeLoc: item.Lgort || item.LGORT || '',
+      StgeLocTo: formData.storageLocationTo || '',
+      Batch: item.Charg || item.CHARG || '',
+      Quantity: String(parseFloat(item.Qty || item.QTY || item.Quantity || '0').toFixed(3)),
+      EntryUom: item.Meins || item.MEINS || 'KG',
+      MoveType: '' // Empty string as per SAP format
+    };
+  });
 
   const payload = {
-    IvMatnr: String(item.Matnr || item.MATNR || item.matnr || '').replace(/^0+/, ''),
-    IvWerks: item.Werks || item.WERKS || '1134',
-    IvBwart: '313',
-    IvGmCode: '04',
-    IvLgortFrom: item.Lgort || item.LGORT || '',
-    IvLgortTo: formData.storageLocationTo || '',
-    IvCharg: item.Charg || item.CHARG || '',
-    IvQty: String(parseFloat(item.Qty || item.QTY || item.Quantity || '0').toFixed(3)),
-    IvUom: item.Meins || item.MEINS || 'KG'
+    Bwart: '313',
+    GmCode: '04',
+    TestRun: isTestRun ? 'X' : '',
+    ...((environment === 'prd' || environment === '300') ? { DocHeaderText: 'From App' } : {}),
+    NavItems: navItems
   };
 
   console.log('Prepared payload:', JSON.stringify(payload, null, 2));
@@ -113,7 +123,7 @@ const preparePayload = (isTestRun) => {
       const creds = getUserCredentials();
       if (!creds) throw new Error("User not authenticated. Please log in again.");
 
-      const payload = preparePayload(isTestRun);
+      const payload = preparePayload(isTestRun, creds.environment);
       
       // MIGO2 page should always use dev backend
       const baseUrl = apiEndpoints.dev;

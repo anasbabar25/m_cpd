@@ -3,12 +3,48 @@ const router = express.Router();
 const axios = require('axios');
 const https = require('https');
 
-const API_URLS = {
-  dev: 'https://devspace.test.apimanagement.eu10.hana.ondemand.com/cpd/pc/stg',
-  prd: 'https://prdspace.prod01.apimanagement.eu10.hana.ondemand.com:443/plc/stg/TransferHeaderSet'
-};
-
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+
+// Axios instance for DEV/110 only: prevent Brotli/compression negotiation.
+const sapAxiosDev = axios.create({
+  httpsAgent,
+  headers: { 'User-Agent': 'SAP-Integration-Backend' },
+  decompress: false,
+  maxContentLength: 50 * 1024 * 1024,
+  maxBodyLength: 50 * 1024 * 1024
+});
+
+// Defensive (DEV only): ensure we never forward any compression negotiation/encodings (e.g. br)
+sapAxiosDev.interceptors.request.use((config) => {
+  config.headers = config.headers || {};
+  // Some upstream proxies treat Accept-Encoding values as "unsupported encodings".
+  // Force identity regardless of axios/node defaults.
+  config.headers['Accept-Encoding'] = 'identity';
+  config.headers['accept-encoding'] = 'identity';
+
+  delete config.headers['Content-Encoding'];
+  delete config.headers['content-encoding'];
+  return config;
+});
+
+// PRD/300: keep behavior unchanged (no header forcing)
+const sapAxiosPrd = axios.create({
+  httpsAgent,
+  headers: { 'User-Agent': 'SAP-Integration-Backend' },
+  maxContentLength: 50 * 1024 * 1024,
+  maxBodyLength: 50 * 1024 * 1024
+});
+
+const SAP_ODATA = {
+  dev: {
+    baseUrl: 'https://devspace.test.apimanagement.eu10.hana.ondemand.com/plc/stg',
+    transferPath: '/TransferHeaderSet'
+  },
+  prd: {
+    baseUrl: 'https://prdspace.prod01.apimanagement.eu10.hana.ondemand.com:443/plc/stg',
+    transferPath: '/TransferHeaderSet'
+  }
+};
 
 const normalizeEnvironment = (env) => {
   if (env === '110' || env === 'dev') return 'dev';
@@ -41,11 +77,19 @@ const extractDocumentNumber = (sapResponse) => {
   return docNumber;
 };
 
-async function callSapApi(apiUrl, payload, username, password) {
-  const csrfResp = await axios.head(apiUrl, {
-    httpsAgent,
+async function callSapApi(env, payload, username, password) {
+  const { baseUrl, transferPath } = SAP_ODATA[env] || SAP_ODATA.dev;
+  const transferUrl = `${baseUrl}${transferPath}`;
+  const sapClient = env === 'prd' ? '300' : '110';
+  const http = env === 'prd' ? sapAxiosPrd : sapAxiosDev;
+
+  // Fetch CSRF token from service root to avoid 4xx on entity set
+  const csrfResp = await http.head(`${baseUrl}/`, {
     auth: { username, password },
-    headers: { 'X-CSRF-Token': 'Fetch' }
+    params: { 'sap-client': sapClient },
+    headers: { 
+      'X-CSRF-Token': 'Fetch',
+    }
   });
 
   const csrfToken = csrfResp.headers['x-csrf-token'];
@@ -53,13 +97,13 @@ async function callSapApi(apiUrl, payload, username, password) {
     .map(c => c.split(';')[0])
     .join('; ');
 
-  const response = await axios.post(apiUrl, payload, {
-    httpsAgent,
+  const response = await http.post(transferUrl, payload, {
     auth: { username, password },
+    params: { 'sap-client': sapClient },
     headers: {
       'X-CSRF-Token': csrfToken,
       'Cookie': cookies,
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
     }
   });
 
@@ -68,10 +112,9 @@ async function callSapApi(apiUrl, payload, username, password) {
 
 async function continueWithCheck(req, res, { username, password, environment, payload }) {
   try {
-    const apiUrl = API_URLS[environment];
-    console.log(`[${environment.toUpperCase()}] Check URL:`, apiUrl);
+    console.log(`[${environment.toUpperCase()}] Check URL:`, `${SAP_ODATA[environment]?.baseUrl || SAP_ODATA.dev.baseUrl}${SAP_ODATA[environment]?.transferPath || SAP_ODATA.dev.transferPath}`);
     payload.TestRun = 'X';
-    const response = await callSapApi(apiUrl, payload, username, password);
+    const response = await callSapApi(environment, payload, username, password);
     const documentNumber = extractDocumentNumber({ raw: response.data });
     return res.json({ success: true, documentNumber, raw: response.data });
   } catch (err) {
@@ -82,10 +125,9 @@ async function continueWithCheck(req, res, { username, password, environment, pa
 
 async function continueWithPost(req, res, { username, password, environment, payload }) {
   try {
-    const apiUrl = API_URLS[environment];
-    console.log(`[${environment.toUpperCase()}] Post URL:`, apiUrl);
+    console.log(`[${environment.toUpperCase()}] Post URL:`, `${SAP_ODATA[environment]?.baseUrl || SAP_ODATA.dev.baseUrl}${SAP_ODATA[environment]?.transferPath || SAP_ODATA.dev.transferPath}`);
     delete payload.TestRun;
-    const response = await callSapApi(apiUrl, payload, username, password);
+    const response = await callSapApi(environment, payload, username, password);
     const documentNumber = extractDocumentNumber({ raw: response.data });
     return res.json({ success: true, documentNumber, raw: response.data });
   } catch (err) {
@@ -95,11 +137,29 @@ async function continueWithPost(req, res, { username, password, environment, pay
 }
 
 const buildPayload = (body) => {
+  const docHeaderText =
+    typeof body?.DocHeaderText === 'string' && body.DocHeaderText.trim()
+      ? body.DocHeaderText.trim().slice(0, 25)
+      : undefined;
+
+  // If the frontend sends the new format with NavItems array, use it directly
+  if (Array.isArray(body.NavItems) && body.NavItems.length > 0) {
+    return {
+      Bwart: body.Bwart || '313',
+      GmCode: body.GmCode || '04',
+      TestRun: body.TestRun || '',
+      ...(docHeaderText ? { DocHeaderText: docHeaderText } : {}),
+      NavItems: body.NavItems
+    };
+  }
+  
+  // Legacy support for single item format
   if (body.IvMatnr && body.IvWerks) {
     return {
-      Bwart: body.IvBwart,
-      GmCode: body.IvGmCode,
-      TestRun: body.IvTestRun,
+      Bwart: body.IvBwart || '313',
+      GmCode: body.IvGmCode || '04',
+      TestRun: body.IvTestRun || '',
+      ...(docHeaderText ? { DocHeaderText: docHeaderText } : {}),
       NavItems: [{
         Material: body.IvMatnr,
         Plant: body.IvWerks,
@@ -108,15 +168,17 @@ const buildPayload = (body) => {
         Batch: body.IvCharg,
         Quantity: body.IvQty,
         EntryUom: body.IvUom,
-        MoveType: body.IvBwart
+        MoveType: body.IvBwart || '313'
       }]
     };
   }
-  if (Array.isArray(body.NavItems)) return body;
+  
+  // Fallback for old format
   return {
     Bwart: body.movementType || '313',
     GmCode: '04',
     TestRun: 'X',
+    ...(docHeaderText ? { DocHeaderText: docHeaderText } : {}),
     NavItems: [{
       Material: body.MATNR,
       Plant: body.Werks,
