@@ -168,7 +168,13 @@ function MigoPage({ user, onLogout }) {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Transfer API Error:', errorText);
-        throw new Error(`Transfer failed: ${response.status} ${response.statusText}`);
+        let message = `Transfer failed: ${response.status} ${response.statusText}`;
+        try {
+          const parsed = JSON.parse(errorText);
+          if (parsed?.message) message = parsed.message;
+          else if (parsed?.error) message = parsed.error;
+        } catch (_) {}
+        throw new Error(message);
       }
 
       const result = await response.json();

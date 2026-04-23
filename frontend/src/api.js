@@ -71,7 +71,10 @@ export const getUserCredentials = () => {
   if (!token) return null;
   try {
     const decoded = atob(token);
-    const [username, password] = decoded.split(':');
+    const idx = decoded.indexOf(':');
+    const username = idx > 0 ? decoded.slice(0, idx) : null;
+    const password = idx > 0 ? decoded.slice(idx + 1) : null;
+    if (!username || !password) return null;
     const userStr = localStorage.getItem('user');
     const user = userStr ? JSON.parse(userStr) : {};
     return { username, password, environment: user.environment };
