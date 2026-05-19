@@ -15,6 +15,11 @@ function MainPage({ user, onLogout }) {
       title: "CPD - Place In Storage",
       path: "/bsp"
     },
+        { 
+      id: "rpt", 
+      title: "CPD - MMBE Report",
+      path: "/inventory-report"
+    },
   ];
 
   const handleTileClick = (path) => {

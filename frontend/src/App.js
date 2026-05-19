@@ -8,6 +8,8 @@ import BspPage2 from "./pages/BspPage2";
 import MigoPage2 from "./pages/MigoPage2";
 import ScanPage from "./pages/ScanPage";
 import SplashScreen from "./pages/SplashScreen";
+import InventoryReportPage from "./pages/InventoryReportPage";
+import ReportPage from "./pages/ReportPage";
 
 function SplashScreenWrapper() {
   const navigate = useNavigate();
@@ -97,6 +99,24 @@ function App() {
             element={
               <ProtectedRoute>
                 <MigoPage user={user} onLogout={handleLogout} />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/inventory-report"
+            element={
+              <ProtectedRoute>
+                <InventoryReportPage user={user} onLogout={handleLogout} />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/report"
+            element={
+              <ProtectedRoute>
+                <ReportPage user={user} onLogout={handleLogout} />
               </ProtectedRoute>
             }
           />

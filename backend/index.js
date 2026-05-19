@@ -10,6 +10,7 @@ const migoRoutes = require("./routes/migoRoutes");
 const materialDocRoutes = require("./routes/materialDocRoutes");
 const materialCheckRoutes = require("./routes/materialCheckRoutes");
 const migoTransferRoutes = require("./routes/migoTransferRoutes");
+const inventoryReportRoutes = require("./routes/inventoryReportRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -47,6 +48,7 @@ app.use("/api/migo", migoRoutes);
 app.use("/api/material-doc", materialDocRoutes);
 app.use("/api/MaterialDocument", materialCheckRoutes);
 app.use("/api/migo-transfer", migoTransferRoutes);
+app.use("/api", inventoryReportRoutes);
 
 /**
  * Error handling (must be last)
@@ -70,6 +72,7 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log("Material Doc endpoint: POST /api/material-doc/fetch");
   console.log("Material Check endpoint: POST /api/MaterialDocument/check");
   console.log("MIGO Transfer endpoint: POST /api/migo-transfer/transfer");
+  console.log("Inventory Report endpoint: POST /api/inventory-report");
 });
 
 // Utility function to log your local IP
