@@ -11,16 +11,13 @@ export function getMockInventoryReport(materialNumber, sloc) {
     unrestrictedQuantity: 250,
     qualityQuantity: 40,
     reservedQuantity: 15,
-    transferSloc: "0002",
+    transferSloc: "SF03",
   };
 }
 
 const useClientMock = process.env.REACT_APP_INVENTORY_REPORT_MOCK === "true";
 
 function getApiBaseUrl(environment) {
-  if (process.env.NODE_ENV === "development") {
-    return "";
-  }
   return apiEndpoints[environment] || apiEndpoints.dev;
 }
 
@@ -31,10 +28,12 @@ export async function fetchInventoryReport(materialNumber, sloc, creds) {
   }
 
   const baseUrl = getApiBaseUrl(creds.environment);
-  const response = await axios.post(
+  const isSapCf = baseUrl.includes('sap-app.cfapps');
+
+  const response = await axios.get(
     `${baseUrl}/api/inventory-report`,
-    { materialNumber: materialNumber.trim(), sloc: sloc.trim() },
-    {
+ {
+      params: { materialNumber: materialNumber.trim(), sloc: sloc.trim() },
       headers: {
         "Content-Type": "application/json",
         "X-User-Auth": btoa(`${creds.username}:${creds.password}`),
