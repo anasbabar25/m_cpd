@@ -6,5 +6,7 @@ export const servers = [
 export const apiEndpoints = {
   dev: 'http://localhost:3000',
   dev2: 'http://localhost:3000',
-  prd: 'https://sap-app.cfapps.eu10-004.hana.ondemand.com'
+  prd: 'http://localhost:3000'
 };
+
+export const localBackendUrl = 'http://localhost:3000';

@@ -7,17 +7,17 @@ function MainPage({ user, onLogout }) {
   const navTiles = [
     { 
       id: "rmv", 
-      title: "CPD - Remove From Storage",
+      title: "Remove From Storage",
       path: "/bsp2"
     },
     { 
       id: "plc", 
-      title: "CPD - Place In Storage",
+      title: "Place In Storage",
       path: "/bsp"
     },
         { 
       id: "rpt", 
-      title: "CPD - MMBE Report",
+      title: "MMBE Report",
       path: "/inventory-report"
     },
   ];

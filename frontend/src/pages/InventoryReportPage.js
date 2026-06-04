@@ -5,7 +5,7 @@ import {
   fetchInventoryReport,
   isInventoryReportMockEnabled,
 } from "../api/inventoryReportApi";
-import { INVENTORY_REPORT_PLANT } from "../constants/inventoryReport";
+import { getInventoryReportPlant } from "../constants/inventoryReport";
 
 function InventoryReportPage({ user, onLogout }) {
   const navigate = useNavigate();
@@ -45,11 +45,17 @@ function InventoryReportPage({ user, onLogout }) {
         throw new Error("User not authenticated. Please log in again.");
       }
 
+      const plant = creds.plant?.trim() || user?.plant?.trim() || getInventoryReportPlant();
+      if (!plant) {
+        throw new Error("Plant not set. Please log in again.");
+      }
+
       // Force correct backend environment selection
       // 110 -> dev
       // 300 -> prd
       const credsWithEnv = {
         ...creds,
+        plant,
 
         environment:
           user?.client === "300"
@@ -211,11 +217,17 @@ function InventoryReportPage({ user, onLogout }) {
               />
             </div>
 
-            <input
-              type="hidden"
-              name="plant"
-              value={INVENTORY_REPORT_PLANT}
-            />
+            <div className="form-group">
+              <label htmlFor="plant">Plant</label>
+              <input
+                id="plant"
+                type="text"
+                name="plant"
+                value={user?.plant || getInventoryReportPlant()}
+                readOnly
+                disabled={loading}
+              />
+            </div>
 
             <button
               type="submit"

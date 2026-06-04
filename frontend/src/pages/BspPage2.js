@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { getUserCredentials } from '../api';
-import { apiEndpoints, batchApiEndpoints } from "../config/servers";
+import { localBackendUrl } from "../config/servers";
 
 function BspPage2({ user, onLogout }) {
   const navigate = useNavigate();
@@ -72,22 +72,23 @@ function BspPage2({ user, onLogout }) {
     try {
       const creds = getUserCredentials();
       if (!creds) throw new Error("User not authenticated. Please log in again.");
+      if (!creds.plant) throw new Error("Plant not set. Please log in again.");
 
-      // Use backend based on environment
-      const baseUrl = apiEndpoints[creds.environment] || apiEndpoints.dev;
-      
-      const endpoint = `/api/BatchInfoGateway/${input}`;
-      
-      const res = await fetch(`${baseUrl}${endpoint}`, {
+      const res = await fetch(`${localBackendUrl}/api/BatchInfoGateway/${input}`, {
         headers: {
           'X-User-Auth': btoa(`${creds.username}:${creds.password}`),
-          'X-User-Environment': creds.environment
+          'X-User-Environment': creds.environment,
+          'X-User-Plant': creds.plant
         }
       });
-      if (!res.ok) throw new Error("Failed to fetch batch information.");
-      const json = await res.json();
-      const d = json?.d || json; // Handle both old and new response formats
-      if (!d?.Charg || Number(d.QTY) <= 0) throw new Error("Failed to fetch batch information");
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to fetch batch information.");
+      }
+      const d = json?.d || json;
+      const qty = Number(d.QTY ?? d.Qty ?? d.Quantity ?? 0);
+      const charg = d.Charg || d.Batch || d.BatchNumber;
+      if (!charg || qty <= 0) throw new Error("Failed to fetch batch information");
       setBatches(prev => [...prev, { d: d }]); // Ensure consistent structure
       setBatchNumber("");
     } catch (err) {

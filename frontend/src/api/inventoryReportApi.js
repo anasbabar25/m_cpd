@@ -1,13 +1,13 @@
 import axios from "axios";
 import { apiEndpoints } from "../config/servers";
-import { INVENTORY_REPORT_PLANT } from "../constants/inventoryReport";
+import { getInventoryReportPlant } from "../constants/inventoryReport";
 
 /** Only used when REACT_APP_INVENTORY_REPORT_MOCK=true */
-export function getMockInventoryReport(materialNumber, sloc) {
+export function getMockInventoryReport(materialNumber, sloc, plant) {
   return {
     materialNumber: materialNumber.trim().toUpperCase(),
-    materialType: "ZHLB",
-    plant: INVENTORY_REPORT_PLANT,
+    //materialType: "ZHLB",
+    plant: plant || getInventoryReportPlant(),
     sloc: sloc.trim().toUpperCase(),
 
     unrestrictedQuantity: 250,
@@ -30,12 +30,18 @@ export async function fetchInventoryReport(
   sloc,
   creds
 ) {
+  const plant = creds.plant?.trim() || getInventoryReportPlant();
+  if (!plant) {
+    throw new Error("Plant not set. Please log in again.");
+  }
+
   if (useClientMock) {
     await new Promise((resolve) => setTimeout(resolve, 400));
 
     return getMockInventoryReport(
       materialNumber,
-      sloc
+      sloc,
+      plant
     );
   }
 
@@ -67,6 +73,8 @@ export async function fetchInventoryReport(
         materialNumber.trim(),
 
       sloc: sloc.trim(),
+
+      plant,
     },
     {
       headers: {
