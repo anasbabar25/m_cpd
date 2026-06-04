@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { getUserCredentials } from '../api';
+import { getBatchRequestParams } from '../api';
 import { localBackendUrl } from "../config/servers";
 
 function BspPage2({ user, onLogout }) {
@@ -70,20 +70,30 @@ function BspPage2({ user, onLogout }) {
 
     setLoading(true);
     try {
-      const creds = getUserCredentials();
+      const creds = getBatchRequestParams(user);
       if (!creds) throw new Error("User not authenticated. Please log in again.");
-      if (!creds.plant) throw new Error("Plant not set. Please log in again.");
+      if (!creds.plant) throw new Error("Plant not set. Please log out and log in again.");
 
-      const res = await fetch(`${localBackendUrl}/api/BatchInfoGateway/${input}`, {
+      const url = new URL(`${localBackendUrl}/api/BatchInfoGateway/${input}`);
+      url.searchParams.set("plant", creds.plant);
+
+      const res = await fetch(url.toString(), {
         headers: {
           'X-User-Auth': btoa(`${creds.username}:${creds.password}`),
           'X-User-Environment': creds.environment,
-          'X-User-Plant': creds.plant
-        }
+          'X-User-Plant': creds.plant,
+        },
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(json.error || "Failed to fetch batch information.");
+        const detail =
+          typeof json.details === "string"
+            ? json.details
+            : json.details?.error?.message?.value || json.details?.message;
+        throw new Error(
+          [json.error, json.message, detail].filter(Boolean).join(" — ") ||
+            "Failed to fetch batch information."
+        );
       }
       const d = json?.d || json;
       const qty = Number(d.QTY ?? d.Qty ?? d.Quantity ?? 0);

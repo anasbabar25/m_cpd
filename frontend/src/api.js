@@ -84,3 +84,32 @@ export const getUserCredentials = () => {
   }
 };
 
+/** Merges localStorage creds with in-memory login user (plant/env). */
+export const getBatchRequestParams = (sessionUser) => {
+  const creds = getUserCredentials();
+  if (!creds) return null;
+
+  const plant = String(creds.plant || sessionUser?.plant || "").trim();
+  let environment = creds.environment || sessionUser?.environment;
+  if (!environment && sessionUser?.client === "300") environment = "prd";
+  if (!environment && sessionUser?.client === "110") environment = "dev";
+  environment = environment || "dev";
+
+  if (plant) {
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      try {
+        const stored = JSON.parse(userStr);
+        if (stored.plant !== plant) {
+          stored.plant = plant;
+          localStorage.setItem("user", JSON.stringify(stored));
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  return { ...creds, plant, environment };
+};
+

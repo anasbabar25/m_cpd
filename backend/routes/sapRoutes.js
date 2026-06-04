@@ -52,6 +52,69 @@ function decodeBasicAuth(encoded) {
   return { username, password };
 }
 
+function getPlantFromRequest(req) {
+  return String(
+    req.headers["x-user-plant"] || req.query.plant || req.query.werks || ""
+  ).trim();
+}
+
+function normalizeBatchEnvironment(raw) {
+  const value = String(raw || "dev").toLowerCase();
+  if (["dev", "development", "110"].includes(value)) {
+    return { environment: "dev", sapClient: "110", isDev: true };
+  }
+  if (["prd", "production", "300"].includes(value)) {
+    return { environment: "prd", sapClient: "300", isDev: false };
+  }
+  return null;
+}
+
+function extractSapErrorMessage(data) {
+  if (!data) return null;
+  if (typeof data === "string") return data;
+  return (
+    data?.error?.message?.value ||
+    data?.error?.message ||
+    data?.message ||
+    null
+  );
+}
+
+function matchesBatchRecord(record, batchNumber, plant) {
+  if (!record) return false;
+  const charg = String(record.Charg || record.Batch || record.BatchNumber || "")
+    .trim()
+    .toUpperCase();
+  const werks = String(record.Werks || record.Plant || record.WERKS || "").trim();
+  const targetBatch = String(batchNumber).trim().toUpperCase();
+  const targetPlant = String(plant).trim();
+  return charg === targetBatch && werks === targetPlant;
+}
+
+function buildBatchLookupUrls(baseUrl, batchNumber, plant, sapClient, isDev) {
+  const formatQs = "$format=json";
+  const clientQs = `sap-client=${sapClient}`;
+
+  if (isDev) {
+    const chargFilter = `Charg eq '${batchNumber}' and Werks eq '${plant}'`;
+    return [
+      `${baseUrl}/BatchInfoSet?$filter=${encodeURIComponent(
+        chargFilter
+      )}&${formatQs}&${clientQs}`,
+      `${baseUrl}/BatchInfoSet?$filter=${encodeURIComponent(chargFilter)}&${formatQs}`,
+    ];
+  }
+
+  // PRD grp/batch: OData $filter is not allowed — use entity key or full read + local match.
+  const safeBatch = batchNumber.replace(/'/g, "''");
+  const safePlant = plant.replace(/'/g, "''");
+  return [
+    `${baseUrl}/BatchInfoSet(Charg='${safeBatch}',Werks='${safePlant}')?${formatQs}&${clientQs}`,
+    `${baseUrl}/BatchInfoSet('${safeBatch}')?${formatQs}&${clientQs}`,
+    `${baseUrl}/BatchInfoSet?${formatQs}&${clientQs}`,
+  ];
+}
+
 function parseBatchResults(data) {
   if (!data) return [];
   if (Array.isArray(data.value)) return data.value;
@@ -75,7 +138,7 @@ function normalizeBatchRecord(record) {
   };
 }
 
-async function requestBatchInfo(url, username, password) {
+async function requestBatchInfo(url, username, password, batchNumber, plant) {
   const response = await axios.get(url, {
     auth: { username, password },
     headers: {
@@ -92,7 +155,12 @@ async function requestBatchInfo(url, username, password) {
   console.log("Batch API status:", response.status);
 
   if (response.status >= 400) {
-    return { error: response.data, status: response.status };
+    const sapMsg = extractSapErrorMessage(response.data);
+    return {
+      error: sapMsg || response.data,
+      status: response.status,
+      data: response.data,
+    };
   }
 
   const results = parseBatchResults(response.data);
@@ -100,38 +168,55 @@ async function requestBatchInfo(url, username, password) {
     return { error: "No batch records in response", status: 404, data: response.data };
   }
 
-  return { batch: normalizeBatchRecord(results[0]) };
+  let match = results.find((r) => matchesBatchRecord(r, batchNumber, plant));
+  if (!match && results.length === 1) {
+    const single = results[0];
+    const charg = String(
+      single.Charg || single.Batch || single.BatchNumber || ""
+    )
+      .trim()
+      .toUpperCase();
+    if (charg === String(batchNumber).trim().toUpperCase()) {
+      match = single;
+    }
+  }
+
+  if (!match) {
+    return { error: "No matching batch in response", status: 404, data: response.data };
+  }
+
+  return { batch: normalizeBatchRecord(match) };
 }
 
-async function fetchBatchFromGateway({ baseUrl, batchNumber, plant, sapClient, username, password }) {
-  const urls = [
-    `${baseUrl}/BatchInfoSet?$filter=${encodeURIComponent(
-      `Charg eq '${batchNumber}' and Werks eq '${plant}'`
-    )}&$format=json&sap-client=${sapClient}`,
-    `${baseUrl}/BatchInfoSet?$filter=${encodeURIComponent(
-      `Charg eq '${batchNumber}' and Werks eq '${plant}'`
-    )}&$format=json`,
-    `${baseUrl}?$filter=${encodeURIComponent(
-      `BatchNumber eq '${batchNumber}' and Werks eq '${plant}'`
-    )}&$format=json&sap-client=${sapClient}`,
-    `${baseUrl}?$filter=${encodeURIComponent(
-      `BatchNumber eq '${batchNumber}' and Werks eq '${plant}'`
-    )}&$format=json`,
-    `${baseUrl}?$filter=${encodeURIComponent(
-      `BatchNumber eq '${batchNumber}'`
-    )}&$format=json&sap-client=${sapClient}`,
-  ];
+async function fetchBatchFromGateway({
+  baseUrl,
+  batchNumber,
+  plant,
+  sapClient,
+  isDev,
+  username,
+  password,
+}) {
+  const urls = buildBatchLookupUrls(baseUrl, batchNumber, plant, sapClient, isDev);
 
   let lastError = { error: "Batch not found", status: 404 };
 
   for (const url of urls) {
-    const result = await requestBatchInfo(url, username, password);
+    const result = await requestBatchInfo(
+      url,
+      username,
+      password,
+      batchNumber,
+      plant
+    );
     if (result.batch) return result.batch;
     lastError = result;
-    if (result.status && result.status !== 404) break;
+    // Do not stop on SAP 400 — try remaining URL patterns (e.g. prd needs sap-client=300).
+    if (result.status === 401 || result.status === 403) break;
   }
 
-  throw Object.assign(new Error("Batch not found"), lastError);
+  const sapMsg = extractSapErrorMessage(lastError.error);
+  throw Object.assign(new Error(sapMsg || "Batch not found"), lastError);
 }
  
 /* =====================================================
@@ -192,13 +277,13 @@ router.get("/batch/300/:batchNumber", async (req, res) => {
   try {
     const { batchNumber } = req.params;
     const authHeader = req.headers["x-user-auth"];
-    const plant = req.headers["x-user-plant"];
+    const plant = getPlantFromRequest(req);
 
     if (!authHeader) {
       return res.status(401).json({ error: "User credentials required" });
     }
     if (!plant) {
-      return res.status(400).json({ error: "X-User-Plant header required" });
+      return res.status(400).json({ error: "Plant is required (X-User-Plant or ?plant=)" });
     }
 
     const { username, password } = decodeBasicAuth(authHeader);
@@ -207,6 +292,7 @@ router.get("/batch/300/:batchNumber", async (req, res) => {
       batchNumber,
       plant,
       sapClient: "300",
+      isDev: false,
       username,
       password,
     });
@@ -233,7 +319,7 @@ router.get("/batch/300/:batchNumber", async (req, res) => {
 router.get("/BatchInfo/:batchNumber", async (req, res) => {
   try {
     const { batchNumber } = req.params;
-    const plant = (req.headers["x-user-plant"] || req.query.werks || "").trim();
+    const plant = getPlantFromRequest(req);
 
     const authHeader = req.headers["x-user-auth"];
     const environment = req.headers["x-user-environment"] || "dev";
@@ -249,40 +335,18 @@ router.get("/BatchInfo/:batchNumber", async (req, res) => {
     const isPrd = environment === "prd" || environment === "300";
     const sapClient = isPrd ? "300" : "110";
 
-    const filter = `Charg eq '${batchNumber}' and Werks eq '${plant}'`;
- 
     const baseUrl = isPrd ? API_URL_PRD : API_URL_DEV;
-
-    const url = isPrd
-      ? `${baseUrl}/BatchInfoSet?$filter=${encodeURIComponent(filter)}&$format=json`
-      : `${baseUrl}/BatchInfoSet?$filter=${encodeURIComponent(filter)}&$format=json&sap-client=${sapClient}`;
- 
-    const response = await axios.get(url, {
-      auth: { username, password },
-      headers: {
-        Accept: "application/json",
-        "X-Requested-With": "XMLHttpRequest",
-        "Accept-Encoding": SAP_ACCEPT_ENCODING,
-      },
-      httpsAgent,
-      timeout: 30000,
-      validateStatus: () => true,
+    const batch = await fetchBatchFromGateway({
+      baseUrl,
+      batchNumber,
+      plant,
+      sapClient,
+      isDev: !isPrd,
+      username,
+      password,
     });
- 
-    if (response.status >= 400) {
-      return res.status(response.status).json({
-        error: "SAP API error",
-        status: response.status,
-        data: response.data,
-      });
-    }
- 
-    const results = response.data?.d?.results;
-    if (!results || !results.length) {
-      return res.status(404).json({ error: "Batch not found" });
-    }
- 
-    res.set(corsHeaders).json(results[0]);
+
+    res.set(corsHeaders).json(batch);
   } catch (err) {
     console.error("BatchInfo error:", err.message);
     return res.status(500).json({ error: "Internal server error" });
@@ -296,43 +360,53 @@ router.get("/BatchInfo/:batchNumber", async (req, res) => {
 router.get("/BatchInfoGateway/:batchNumber", async (req, res) => {
   try {
     const { batchNumber } = req.params;
-    const environment = req.headers["x-user-environment"] || "dev";
- 
-    if (!["dev", "110", "prd", "300"].includes(environment)) {
-      return res
-        .status(400)
-        .json({ error: "X-User-Environment must be 'dev', '110', 'prd', or '300'" });
+    const envConfig = normalizeBatchEnvironment(req.headers["x-user-environment"]);
+
+    if (!envConfig) {
+      return res.status(400).json({
+        error: "Invalid X-User-Environment",
+        message: "Use dev, 110, prd, or 300",
+      });
     }
- 
+
     const authHeader = req.headers["x-user-auth"];
     if (!authHeader) {
       return res.status(401).json({
-        error: "X-User-Auth header required - must be base64 encoded username:password"
+        error: "X-User-Auth header required - must be base64 encoded username:password",
       });
     }
- 
+
     const { username, password } = decodeBasicAuth(authHeader);
-    const plant = req.headers["x-user-plant"];
+    const plant = getPlantFromRequest(req);
     if (!plant) {
-      return res.status(400).json({ error: "X-User-Plant header required" });
+      return res.status(400).json({
+        error: "Plant is required",
+        message: "Send X-User-Plant header or ?plant= query (from login)",
+      });
     }
 
-    const isDev = environment === "dev" || environment === "110";
-    const sapClient = isDev ? "110" : "300";
-    const baseUrl = isDev ? API_URL_DEV : API_URL_PRD;
+    const baseUrl = envConfig.isDev ? API_URL_DEV : API_URL_PRD;
+
+    console.log("BatchInfoGateway:", {
+      batchNumber,
+      plant,
+      environment: envConfig.environment,
+      baseUrl,
+    });
 
     const batch = await fetchBatchFromGateway({
       baseUrl,
       batchNumber,
       plant,
-      sapClient,
+      sapClient: envConfig.sapClient,
+      isDev: envConfig.isDev,
       username,
       password,
     });
 
     return res.set(corsHeaders).json(batch);
   } catch (err) {
-    console.error("Gateway error:", err.message);
+    console.error("Gateway error:", err.message, err.status, err.error);
     if (err.status === 401) {
       return res.status(401).json({ error: "Authentication failed" });
     }
