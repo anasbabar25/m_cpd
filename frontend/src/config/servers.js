@@ -3,10 +3,12 @@ export const servers = [
   { label: "Production", value: "prd" },
 ];
 
+export const CF_BACKEND_URL = 'https://sap-app-cpd.cfapps.eu10-004.hana.ondemand.com';
+
 export const apiEndpoints = {
-  dev: 'http://localhost:3000',
-  dev2: 'http://localhost:3000',
-  prd: 'http://localhost:3000'
+  dev: CF_BACKEND_URL,
+  dev2: CF_BACKEND_URL,
+  prd: CF_BACKEND_URL,
 };
 
-export const localBackendUrl = 'http://localhost:3000';
+export const localBackendUrl = process.env.REACT_APP_API_URL ?? CF_BACKEND_URL;

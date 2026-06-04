@@ -8,8 +8,10 @@ const router = express.Router();
    CONFIG
 ===================================================== */
  
+// 110/dev batch info (plant from X-User-Plant)
 const API_URL_DEV = "https://devspace.test.apimanagement.eu10.hana.ondemand.com/bsp/mh/batch";
-const API_URL_PRD = "https://prdspace.prod01.apimanagement.eu10.hana.ondemand.com:443/bsp/mh/batch";
+// 300/prd batch info (plant from X-User-Plant)
+const API_URL_PRD = "https://prdspace.prod01.apimanagement.eu10.hana.ondemand.com/grp/batch";
  
 const SAP_USER = process.env.SAP_USER;
 const SAP_PASS = process.env.SAP_PASS;
@@ -30,11 +32,11 @@ const corsHeaders = {
 };
  
 router.use((req, res, next) => {
+  res.set(corsHeaders);
   if (req.method === "OPTIONS") {
-    res.set(corsHeaders).sendStatus(200);
-  } else {
-    next();
+    return res.sendStatus(204);
   }
+  next();
 });
  
 /* =====================================================
@@ -190,26 +192,36 @@ router.get("/batch/300/:batchNumber", async (req, res) => {
   try {
     const { batchNumber } = req.params;
     const authHeader = req.headers["x-user-auth"];
- 
+    const plant = req.headers["x-user-plant"];
+
     if (!authHeader) {
       return res.status(401).json({ error: "User credentials required" });
     }
- 
-    const url = `${API_URL_DEV}?$filter=BatchNumber eq '${batchNumber}'`;
- 
-    const response = await axios.get(url, {
-      headers: {
-        Authorization: `Basic ${authHeader}`,
-        Accept: "application/json",
-        "Accept-Encoding": SAP_ACCEPT_ENCODING,
-      },
-      httpsAgent,
-      validateStatus: () => true,
+    if (!plant) {
+      return res.status(400).json({ error: "X-User-Plant header required" });
+    }
+
+    const { username, password } = decodeBasicAuth(authHeader);
+    const batch = await fetchBatchFromGateway({
+      baseUrl: API_URL_PRD,
+      batchNumber,
+      plant,
+      sapClient: "300",
+      username,
+      password,
     });
- 
-    return res.status(response.status).json(response.data);
+
+    res.set(corsHeaders);
+    return res.json(batch);
   } catch (err) {
     console.error("300 batch fetch error:", err.message);
+    res.set(corsHeaders);
+    if (err.status && err.status >= 400 && err.status < 500) {
+      return res.status(err.status).json({
+        error: err.message || "Batch not found",
+        details: err.error,
+      });
+    }
     return res.status(500).json({ error: "Failed to fetch batch" });
   }
 });
@@ -221,23 +233,26 @@ router.get("/batch/300/:batchNumber", async (req, res) => {
 router.get("/BatchInfo/:batchNumber", async (req, res) => {
   try {
     const { batchNumber } = req.params;
-    const { werks = "1134" } = req.query;
- 
+    const plant = (req.headers["x-user-plant"] || req.query.werks || "").trim();
+
     const authHeader = req.headers["x-user-auth"];
     const environment = req.headers["x-user-environment"] || "dev";
- 
+
     if (!authHeader) {
       return res.status(401).json({ error: "User credentials required" });
     }
- 
+    if (!plant) {
+      return res.status(400).json({ error: "X-User-Plant header required" });
+    }
+
     const { username, password } = decodeBasicAuth(authHeader);
-    const sapClient = environment === "prd" ? "300" : "110";
- 
-    const filter = `Charg eq '${batchNumber}' and Werks eq '${werks}'`;
- 
     const isPrd = environment === "prd" || environment === "300";
-    const baseUrl = isPrd ? API_URL_PRD : API_URL_DEV;
+    const sapClient = isPrd ? "300" : "110";
+
+    const filter = `Charg eq '${batchNumber}' and Werks eq '${plant}'`;
  
+    const baseUrl = isPrd ? API_URL_PRD : API_URL_DEV;
+
     const url = isPrd
       ? `${baseUrl}/BatchInfoSet?$filter=${encodeURIComponent(filter)}&$format=json`
       : `${baseUrl}/BatchInfoSet?$filter=${encodeURIComponent(filter)}&$format=json&sap-client=${sapClient}`;
